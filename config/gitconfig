@@ -1,0 +1,34 @@
+[init]
+	defaultBranch = main
+[alias]
+	br = branch
+	ci = commit
+	cm = commit -m
+	cy = commit -m stable
+	cn = commit -m unstable
+	ud = commit -m update
+	st = status
+	sts = status --short
+	co = checkout
+	last = log -1 HEAD
+	l = !git -c core.pager='less -FRSX' -c color.ui=always -c color.decorate.HEAD='yellow bold' -c color.decorate.current='yellow bold' -c color.decorate.branch=cyan -c color.decorate.remoteBranch=magenta -c color.decorate.tag=green -c color.decorate.stash=red log --decorate=short --color=always --graph --pretty=format:'%C(yellow)%h%Creset %C(auto)%d%Creset - %C(cyan)%an%Creset: %s %C(green)(%cr)%Creset'
+	gcp = cherry-pick
+	df = diff
+	dfs = diff --stat
+	rb = rebase
+	a = add
+	aa = add .
+	amd = commit --amend --no-edit
+	revert = rvt
+	fc = fetch
+	poh = push origin head
+	pohf = push origin head --force
+	rs = reset
+	tt = test
+	sh = show HEAD
+	shs = show HEAD --stat
+	cc = commit -C HEAD --reset-author
+	sc = switch -
+	bl = log --oneline --decorate -n 10
+	ss = stash
+	pl = pull
