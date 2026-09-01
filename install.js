@@ -22,10 +22,10 @@ const REPO_RAW_BASE = 'https://raw.githubusercontent.com/mesopix/git-config/main
 const IS_WINDOWS = process.platform === 'win32';
 const TOOL_NAME = 'git-config-sync';
 
-const USAGE = `用法：
-  node install.js                        从 GitHub 下载托管配置并安装
-  node install.js /path/to/gitconfig     从本地文件安装
-  node install.js --uninstall            卸载（移除 include.path 条目并删除托管配置）`;
+const USAGE = `Usage:
+  node install.js                        download config/gitconfig from GitHub and install
+  node install.js /path/to/gitconfig     install from a local file
+  node install.js --uninstall            remove the include.path entry and the managed gitconfig`;
 
 // Colors: only when writing to a terminal (and NO_COLOR is unset), so
 // piped output and log files stay free of ANSI escape codes.
@@ -36,13 +36,18 @@ const colorFor = (stream) =>
 const OUT = colorFor(process.stdout);
 const ERR = colorFor(process.stderr);
 
-function ok(msg) { console.log(`${OUT.green}✓ ${msg}${OUT.reset}`); }
-function warn(msg) { console.log(`${OUT.yellow}⚠ ${msg}${OUT.reset}`); }
+// okText/warnText build colored lines; ok prints one immediately. The
+// install flow buffers its lines via okText/warnText instead, so a no-op
+// run prints a single summary line rather than a multi-line report that
+// reads like a failure.
+function okText(msg) { return `${OUT.green}✓ ${msg}${OUT.reset}`; }
+function warnText(msg) { return `${OUT.yellow}⚠ ${msg}${OUT.reset}`; }
+function ok(msg) { console.log(okText(msg)); }
 
 function die(msg) {
-  console.error(`${ERR.red}错误：${msg}${ERR.reset}`);
+  console.error(`${ERR.red}Error: ${msg}${ERR.reset}`);
   if (DOWNLOADED_SELF && fs.existsSync(DOWNLOADED_SELF)) {
-    console.error(`（安装脚本保留在 ${DOWNLOADED_SELF}，修复后可直接 node install.js 重试）`);
+    console.error(`(the installer was kept at ${DOWNLOADED_SELF}; fix the problem and re-run: node install.js)`);
   }
   process.exit(1);
 }
@@ -75,9 +80,9 @@ function cleanupDownloadedSelf() {
   if (DOWNLOADED_SELF && fs.existsSync(DOWNLOADED_SELF)) {
     try {
       fs.unlinkSync(DOWNLOADED_SELF);
-      ok(`已清理下载的安装脚本：${DOWNLOADED_SELF}`);
+      ok(`removed downloaded installer: ${DOWNLOADED_SELF}`);
     } catch (e) {
-      console.log(`  （安装脚本可手动删除：${DOWNLOADED_SELF}）`);
+      console.log(`(you can delete the installer manually: ${DOWNLOADED_SELF})`);
     }
   }
 }
@@ -89,12 +94,12 @@ function download(url, redirectsLeft) {
     https.get(url, { headers: { 'User-Agent': 'git-config-sync-installer' } }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume();
-        if (redirectsLeft <= 0) return reject(new Error('重定向次数过多'));
+        if (redirectsLeft <= 0) return reject(new Error('too many redirects'));
         return resolve(download(res.headers.location, redirectsLeft - 1));
       }
       if (res.statusCode !== 200) {
         res.resume();
-        return reject(new Error(`下载失败：HTTP ${res.statusCode}（${url}）`));
+        return reject(new Error(`download failed: HTTP ${res.statusCode} (${url})`));
       }
       const chunks = [];
       res.on('data', (c) => chunks.push(c));
@@ -109,7 +114,7 @@ function download(url, redirectsLeft) {
 // and is simply updated in place.
 function userConfigDir() {
   if (IS_WINDOWS) {
-    if (!process.env.APPDATA) die('环境变量 APPDATA 未设置，无法确定用户配置目录');
+    if (!process.env.APPDATA) die('Environment variable APPDATA is not set; cannot determine the user config directory');
     return process.env.APPDATA;
   }
   if (process.platform === 'darwin') {
@@ -135,7 +140,7 @@ function git(args) {
 function requireGit() {
   const res = spawnSync('git', ['--version'], { encoding: 'utf8' });
   if (res.status !== 0) {
-    die('未检测到 git：同步与语法校验都依赖它。安装见 https://git-scm.com/downloads');
+    die('git not found: sync and syntax validation both require it. Install from https://git-scm.com/downloads');
   }
 }
 
@@ -165,7 +170,7 @@ function unsetIncludeEntries(spellings) {
     const pattern = `^${escapeRegex(stored)}$`;
     const res = git(['config', '--global', '--unset-all', 'include.path', pattern]);
     if (res.status !== 0 && res.status !== 5) {
-      die(`无法更新全局 include.path：${res.output}`);
+      die(`unable to update global include.path: ${res.output}`);
     }
   }
 }
@@ -174,32 +179,34 @@ function unsetIncludeEntries(spellings) {
 // Idempotent: nothing is written when exactly one matching entry already
 // exists. Duplicate or differently-spelled matches collapse into one.
 function ensureInclude() {
+  const notices = [];
   const matches = getIncludePaths().filter((p) => samePath(p, MANAGED_INCLUDE));
   if (matches.length === 1 && matches[0] === MANAGED_INCLUDE) {
-    ok(`全局 include.path 已就绪：${MANAGED_INCLUDE}`);
-    return false;
+    notices.push(okText(`global include.path already set: ${MANAGED_INCLUDE}`));
+    return { changed: false, notices };
   }
   if (matches.length > 1) {
-    warn(`检测到 ${matches.length} 条重复的 include.path，正在合并为一条`);
+    notices.push(warnText(`found ${matches.length} duplicate include.path entries; merging into one`));
   }
   unsetIncludeEntries([...new Set(matches)]);
   const res = git(['config', '--global', '--add', 'include.path', MANAGED_INCLUDE]);
-  if (res.status !== 0) die(`无法写入全局 include.path：${res.output}`);
-  ok(`已在全局配置添加 include.path：${MANAGED_INCLUDE}`);
-  return true;
+  if (res.status !== 0) die(`unable to write global include.path: ${res.output}`);
+  notices.push(okText(`added include.path to global config: ${MANAGED_INCLUDE}`));
+  return { changed: true, notices };
 }
 
 // ── Managed file install (temp + rename, atomic) ────────
 // Validate the source via git BEFORE replacing anything, so a broken file
 // aborts with the previous install untouched.
 function installManaged(source) {
+  const notices = [];
   const installed = fs.existsSync(MANAGED) ? fs.readFileSync(MANAGED) : null;
   if (installed !== null && installed.equals(source)) {
-    ok(`托管配置已是最新：${MANAGED}`);
-    return false;
+    notices.push(okText(`managed config is already up to date: ${MANAGED}`));
+    return { changed: false, notices };
   }
   if (installed !== null) {
-    warn('已存在的托管配置与安装源不同，将覆盖——本地修改会丢失');
+    notices.push(warnText('existing managed config differs from the source and will be overwritten — local changes will be lost'));
   }
 
   fs.mkdirSync(MANAGED_DIR, { recursive: true });
@@ -210,43 +217,42 @@ function installManaged(source) {
   const check = git(['config', '--file', temp, '--list']);
   if (check.status !== 0) {
     try { fs.unlinkSync(temp); } catch (e) { /* best effort */ }
-    die(`源 gitconfig 无效：\n${check.output}`);
+    die(`invalid gitconfig source:\n${check.output}`);
   }
   fs.renameSync(temp, MANAGED);
-  ok(`已安装托管配置：${MANAGED}`);
-  return true;
+  notices.push(okText(`installed managed config: ${MANAGED}`));
+  return { changed: true, notices };
 }
 
 // ── Source resolution ───────────────────────────────────
 async function resolveSource(explicitPath) {
   if (explicitPath) {
     const p = path.resolve(explicitPath);
-    if (!fs.existsSync(p)) die(`找不到文件：${p}`);
-    ok(`使用本地源文件：${p}`);
-    return fs.readFileSync(p);
+    if (!fs.existsSync(p)) die(`file not found: ${p}`);
+    return { source: fs.readFileSync(p), notices: [okText(`using local source: ${p}`)] };
   }
-  console.log('正在从 GitHub 下载 config/gitconfig …');
   try {
-    return await download(`${REPO_RAW_BASE}/config/gitconfig`);
+    const source = await download(`${REPO_RAW_BASE}/config/gitconfig`);
+    return { source, notices: [okText('fetched config/gitconfig from GitHub')] };
   } catch (e) {
-    die(`${e.message}\n网络不通时可手动下载 config/gitconfig，再执行：node install.js /path/to/gitconfig`);
+    die(`${e.message}\nif the network is unavailable, download config/gitconfig manually, then run: node install.js /path/to/gitconfig`);
   }
 }
 
 // ── Install ─────────────────────────────────────────────
 async function install(explicitPath) {
   requireGit();
-  const source = await resolveSource(explicitPath);
-  const fileChanged = installManaged(source);
-  const includeChanged = ensureInclude();
+  const { source, notices } = await resolveSource(explicitPath);
+  const file = installManaged(source);
+  const inc = ensureInclude();
 
-  // Tailor the closing line so a no-op run doesn't read as if something
-  // had been modified.
-  console.log('');
-  if (fileChanged || includeChanged) {
-    console.log(`${OUT.green}同步完成。托管配置覆盖同名的既有全局配置，立即生效。${OUT.reset}`);
+  // Tailor the closing output: a no-op run prints one affirmative line,
+  // so it can't be mistaken for a failure.
+  if (!file.changed && !inc.changed) {
+    console.log(`${OUT.green}Already up to date — nothing to do.${OUT.reset}`);
   } else {
-    console.log(`${OUT.green}已是最新，未做任何改动。${OUT.reset}`);
+    [...notices, ...file.notices, ...inc.notices].forEach((n) => console.log(n));
+    console.log(`${OUT.green}Sync complete. Managed config overrides same-name global settings and takes effect immediately.${OUT.reset}`);
   }
   cleanupDownloadedSelf();
 }
@@ -255,20 +261,23 @@ async function install(explicitPath) {
 function uninstall() {
   requireGit();
   const matches = getIncludePaths().filter((p) => samePath(p, MANAGED_INCLUDE));
+  let changed = false;
   if (matches.length > 0) {
     unsetIncludeEntries([...new Set(matches)]);
-    ok(`已移除全局配置中指向托管文件的 include.path 条目：${MANAGED_INCLUDE}`);
-  } else {
-    console.log('全局配置中没有指向托管文件的 include.path，跳过。');
+    ok(`removed include.path entry pointing to the managed file: ${MANAGED_INCLUDE}`);
+    changed = true;
   }
   if (fs.existsSync(MANAGED)) {
     fs.rmSync(MANAGED);
-    ok(`已删除 ${MANAGED}`);
+    ok(`deleted ${MANAGED}`);
     try { fs.rmdirSync(MANAGED_DIR); } catch (e) { /* directory not empty */ }
-  } else {
-    console.log(`未找到 ${MANAGED}，跳过。`);
+    changed = true;
   }
-  console.log(`${OUT.green}卸载完成。其他全局配置与 include.path 条目均未改动。${OUT.reset}`);
+  if (changed) {
+    console.log(`${OUT.green}Uninstall complete. Other global config and include.path entries were not touched.${OUT.reset}`);
+  } else {
+    console.log(`${OUT.green}Nothing to uninstall.${OUT.reset}`);
+  }
   cleanupDownloadedSelf();
 }
 
