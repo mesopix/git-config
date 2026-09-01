@@ -31,7 +31,7 @@ curl.exe -fsSL https://raw.githubusercontent.com/mesopix/git-config/main/install
 
 （install.js 会临时下载到当前目录，安装成功后自动删除；失败则保留，修复问题后可直接 `node install.js` 重试，无需重新下载）
 
-也可以 clone 仓库后在目录内执行 `node install.js`（此时直接使用本地 `config/gitconfig`，无需联网）。
+也可以 clone 仓库后执行 `node install.js config/gitconfig` 从本地文件安装（无需联网）。
 
 安装器会自动完成：
 
@@ -60,6 +60,6 @@ git config --global --add include.path "<托管配置的绝对路径>"
 
 ## 修改配置
 
-编辑 [`config/gitconfig`](config/gitconfig) 后重新执行一次安装命令即可同步到本机。
+编辑 [`config/gitconfig`](config/gitconfig) 后在仓库内执行 `node install.js config/gitconfig` 即可同步到本机，无需 push；push 后重新执行安装命令则从 GitHub 拉取最新配置。
 
 > 旧版 Go 二进制的托管路径与 `include.path` 写法与现在完全一致，装过的机器直接重跑安装命令即可无缝切换，无需先卸载。

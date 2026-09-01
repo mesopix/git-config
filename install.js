@@ -4,7 +4,7 @@
  * Cross-platform: Windows / macOS / Linux — only requires Node.js and git.
  *
  * Usage:
- *   node install.js                          install from a cloned repo (reads config/gitconfig beside it)
+ *   node install.js                          download config/gitconfig from GitHub and install
  *   node install.js /path/to/gitconfig       install from a local file
  *   curl -fsSL <url> | node                  remote install (downloads config/gitconfig from GitHub)
  *   node install.js --uninstall              remove the include.path entry and the managed gitconfig
@@ -23,7 +23,7 @@ const IS_WINDOWS = process.platform === 'win32';
 const TOOL_NAME = 'git-config-sync';
 
 const USAGE = `用法：
-  node install.js                        在仓库目录内安装（读取旁边的 config/gitconfig）
+  node install.js                        从 GitHub 下载托管配置并安装
   node install.js /path/to/gitconfig     从本地文件安装
   node install.js --uninstall            卸载（移除 include.path 条目并删除托管配置）`;
 
@@ -224,11 +224,6 @@ async function resolveSource(explicitPath) {
     if (!fs.existsSync(p)) die(`找不到文件：${p}`);
     ok(`使用本地源文件：${p}`);
     return fs.readFileSync(p);
-  }
-  const local = path.join(process.cwd(), 'config', 'gitconfig');
-  if (fs.existsSync(local)) {
-    ok(`使用本地源文件：${local}`);
-    return fs.readFileSync(local);
   }
   console.log('正在从 GitHub 下载 config/gitconfig …');
   try {
