@@ -17,7 +17,7 @@ const path = require('path');
 const https = require('https');
 const { spawnSync } = require('child_process');
 
-const REPO_RAW_BASE = 'https://raw.githubusercontent.com/anonymous/git-config-sync/main';
+const REPO_RAW_BASE = 'https://raw.githubusercontent.com/mesopix/git-config/main';
 
 const IS_WINDOWS = process.platform === 'win32';
 const TOOL_NAME = 'git-config-sync';

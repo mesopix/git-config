@@ -20,13 +20,13 @@
 **macOS / Linux**（Windows 的 Git Bash 里同样可用）：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/anonymous/git-config-sync/main/install.js | node
+curl -fsSL https://raw.githubusercontent.com/mesopix/git-config/main/install.js | node
 ```
 
 **Windows**（PowerShell 或 CMD，系统自带 curl.exe）：
 
 ```
-curl.exe -fsSL https://raw.githubusercontent.com/anonymous/git-config-sync/main/install.js -o install.js && node install.js
+curl.exe -fsSL https://raw.githubusercontent.com/mesopix/git-config/main/install.js -o install.js && node install.js
 ```
 
 （install.js 会临时下载到当前目录，安装成功后自动删除；失败则保留，修复问题后可直接 `node install.js` 重试，无需重新下载）
@@ -44,7 +44,7 @@ curl.exe -fsSL https://raw.githubusercontent.com/anonymous/git-config-sync/main/
 **卸载**：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/anonymous/git-config-sync/main/install.js | node - --uninstall
+curl -fsSL https://raw.githubusercontent.com/mesopix/git-config/main/install.js | node - --uninstall
 ```
 
 或本地执行 `node install.js --uninstall`（只移除指向托管文件的 `include.path` 条目并删除托管文件，其他全局配置与其他 `include.path` 条目均不受影响）。
